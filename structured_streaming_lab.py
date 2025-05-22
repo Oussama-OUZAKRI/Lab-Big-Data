@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import expr
 from time import sleep
+import os
 
 # Initialize Spark Session
 spark = SparkSession.builder \
@@ -8,6 +9,11 @@ spark = SparkSession.builder \
   .config("spark.sql.shuffle.partitions", 5) \
   .master("spark://spark-master:7077") \
   .getOrCreate()
+
+# Création du dossier checkpoints
+checkpoint_dir = "/opt/bitnami/spark/checkpoints"
+if not os.path.exists(checkpoint_dir):
+    os.makedirs(checkpoint_dir)
 
 # 1. Read static version of the dataset
 print("1. Reading static dataset...")
@@ -30,6 +36,7 @@ activityQuery = activityCounts.writeStream \
   .queryName("activity_counts") \
   .format("memory") \
   .outputMode("complete") \
+  .option("checkpointLocation", f"{checkpoint_dir}/activity_counts") \
   .start()
 
 # 5. Show active streams
@@ -39,48 +46,51 @@ print(spark.streams.active)
 # 6. Query the results
 print("6. Querying results every second for 5 seconds...")
 for x in range(5):
-  spark.sql("SELECT * FROM activity_counts").show()
-  sleep(1)
+    spark.sql("SELECT * FROM activity_counts").show()
+    sleep(1)
 
 # 7. Transformations example
 print("7. Performing transformations...")
 simpleTransform = streaming.withColumn("stairs", expr("gt like '%stairs%'")) \
-  .where("stairs") \
-  .where("gt is not null") \
-  .select("gt", "model", "arrival_time", "creation_time") \
-  .writeStream \
-  .queryName("simple_transform") \
-  .format("memory") \
-  .outputMode("append") \
-  .start()
+    .where("stairs") \
+    .where("gt is not null") \
+    .select("gt", "model", "arrival_time", "creation_time") \
+    .writeStream \
+    .queryName("simple_transform") \
+    .format("memory") \
+    .outputMode("append") \
+    .option("checkpointLocation", f"{checkpoint_dir}/simple_transform") \
+    .start()
 
 # 8. Cube aggregation
 print("8. Performing cube aggregation...")
 deviceModelStats = streaming.cube("gt", "model").avg() \
-  .drop("avg(Arrival_time)") \
-  .drop("avg(Creation_Time)") \
-  .drop("avg(Index)") \
-  .writeStream \
-  .queryName("device_counts") \
-  .format("memory") \
-  .outputMode("complete") \
-  .start()
+    .drop("avg(Arrival_time)") \
+    .drop("avg(Creation_Time)") \
+    .drop("avg(Index)") \
+    .writeStream \
+    .queryName("device_model_stats") \
+    .format("memory") \
+    .outputMode("complete") \
+    .option("checkpointLocation", f"{checkpoint_dir}/device_model_stats") \
+    .start()
 
 # 9. Query device stats
 print("9. Querying device statistics:")
-spark.sql("SELECT * FROM device_counts").show()
+spark.sql("SELECT * FROM device_model_stats").show()
 
 # 10. Join with historical data
 print("10. Joining with historical data...")
 historicalAgg = static.groupBy("gt", "model").avg()
-deviceModelStats = streaming.drop("Arrival_Time", "Creation_Time", "Index") \
-  .cube("gt", "model").avg() \
-  .join(historicalAgg, ["gt", "model"]) \
-  .writeStream \
-  .queryName("device_counts") \
-  .format("memory") \
-  .outputMode("complete") \
-  .start()
+joinedStats = streaming.drop("Arrival_Time", "Creation_Time", "Index") \
+    .cube("gt", "model").avg() \
+    .join(historicalAgg, ["gt", "model"]) \
+    .writeStream \
+    .queryName("joined_stats") \
+    .format("memory") \
+    .outputMode("complete") \
+    .option("checkpointLocation", f"{checkpoint_dir}/joined_stats") \
+    .start()
 
 # 11. Reading from Kafka examples
 print("11. Kafka source examples...")
@@ -153,6 +163,6 @@ activityCounts.writeStream\
 # Stop all streams when done
 print("Stopping all streams...")
 for stream in spark.streams.active:
-  stream.stop()
+    stream.stop()
 
 print("Lab completed!")
