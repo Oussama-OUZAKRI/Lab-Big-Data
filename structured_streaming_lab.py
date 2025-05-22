@@ -13,7 +13,7 @@ spark = SparkSession.builder \
 # Création du dossier checkpoints
 checkpoint_dir = "/opt/bitnami/spark/checkpoints"
 if not os.path.exists(checkpoint_dir):
-    os.makedirs(checkpoint_dir)
+  os.makedirs(checkpoint_dir)
 
 # 1. Read static version of the dataset
 print("1. Reading static dataset...")
@@ -45,73 +45,75 @@ print(spark.streams.active)
 
 # 6. Query the results
 print("6. Querying results every second for 5 seconds...")
+time.sleep(5)
 for x in range(5):
-    spark.sql("SELECT * FROM activity_counts").show()
-    sleep(1)
+  spark.sql("SELECT * FROM activity_counts").show()
+  sleep(1)
 
 # 7. Transformations example
 print("7. Performing transformations...")
 simpleTransform = streaming.withColumn("stairs", expr("gt like '%stairs%'")) \
-    .where("stairs") \
-    .where("gt is not null") \
-    .select("gt", "model", "arrival_time", "creation_time") \
-    .writeStream \
-    .queryName("simple_transform") \
-    .format("memory") \
-    .outputMode("append") \
-    .option("checkpointLocation", f"{checkpoint_dir}/simple_transform") \
-    .start()
+  .where("stairs") \
+  .where("gt is not null") \
+  .select("gt", "model", "arrival_time", "creation_time") \
+  .writeStream \
+  .queryName("simple_transform") \
+  .format("memory") \
+  .outputMode("append") \
+  .option("checkpointLocation", f"{checkpoint_dir}/simple_transform") \
+  .start()
 
 # 8. Cube aggregation
 print("8. Performing cube aggregation...")
 deviceModelStats = streaming.cube("gt", "model").avg() \
-    .drop("avg(Arrival_time)") \
-    .drop("avg(Creation_Time)") \
-    .drop("avg(Index)") \
-    .writeStream \
-    .queryName("device_model_stats") \
-    .format("memory") \
-    .outputMode("complete") \
-    .option("checkpointLocation", f"{checkpoint_dir}/device_model_stats") \
-    .start()
+  .drop("avg(Arrival_time)") \
+  .drop("avg(Creation_Time)") \
+  .drop("avg(Index)") \
+  .writeStream \
+  .queryName("device_model_stats") \
+  .format("memory") \
+  .outputMode("complete") \
+  .option("checkpointLocation", f"{checkpoint_dir}/device_model_stats") \
+  .start()
 
 # 9. Query device stats
 print("9. Querying device statistics:")
+time.sleep(5)
 spark.sql("SELECT * FROM device_model_stats").show()
 
 # 10. Join with historical data
 print("10. Joining with historical data...")
 historicalAgg = static.groupBy("gt", "model").avg()
 joinedStats = streaming.drop("Arrival_Time", "Creation_Time", "Index") \
-    .cube("gt", "model").avg() \
-    .join(historicalAgg, ["gt", "model"]) \
-    .writeStream \
-    .queryName("joined_stats") \
-    .format("memory") \
-    .outputMode("complete") \
-    .option("checkpointLocation", f"{checkpoint_dir}/joined_stats") \
-    .start()
+  .cube("gt", "model").avg() \
+  .join(historicalAgg, ["gt", "model"]) \
+  .writeStream \
+  .queryName("joined_stats") \
+  .format("memory") \
+  .outputMode("complete") \
+  .option("checkpointLocation", f"{checkpoint_dir}/joined_stats") \
+  .start()
 
 # 11. Reading from Kafka examples
 print("11. Kafka source examples...")
 
 # Subscribe to 1 topic
 df1 = spark.readStream.format("kafka")\
-    .option("kafka.bootstrap.servers", "kafka:9092")\
-    .option("subscribe", "topic1")\
-    .load()
+  .option("kafka.bootstrap.servers", "kafka:9092")\
+  .option("subscribe", "activity-data")\
+  .load()
 
 # Subscribe to multiple topics
 df2 = spark.readStream.format("kafka")\
-    .option("kafka.bootstrap.servers", "kafka:9092")\
-    .option("subscribe", "topic1,topic2")\
-    .load()
+  .option("kafka.bootstrap.servers", "kafka:9092")\
+  .option("subscribe", "topic1,topic2")\
+  .load()
 
 # Subscribe to a pattern
 df3 = spark.readStream.format("kafka")\
-    .option("kafka.bootstrap.servers", "kafka:9092")\
-    .option("subscribePattern", "topic.*")\
-    .load()
+  .option("kafka.bootstrap.servers", "kafka:9092")\
+  .option("subscribePattern", "topic.*")\
+  .load()
 
 # 12. Writing to Kafka examples
 print("12. Kafka sink examples...")
@@ -119,7 +121,7 @@ print("12. Kafka sink examples...")
 df1.selectExpr("topic", "CAST(key AS STRING)", "CAST(value AS STRING)")\
   .writeStream\
   .format("kafka")\
-  .option("kafka.bootstrap.servers", "localhost:9092")\
+  .option("kafka.bootstrap.servers", "kafka:9092")\
   .option("checkpointLocation", "./checkpoints")\
   .start()
 
@@ -127,7 +129,7 @@ df1.selectExpr("topic", "CAST(key AS STRING)", "CAST(value AS STRING)")\
 df1.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")\
   .writeStream\
   .format("kafka")\
-  .option("kafka.bootstrap.servers", "localhost:9092")\
+  .option("kafka.bootstrap.servers", "kafka:9092")\
   .option("checkpointLocation", "./checkpoints")\
   .option("topic", "topic1")\
   .start()
@@ -162,7 +164,8 @@ activityCounts.writeStream\
 
 # Stop all streams when done
 print("Stopping all streams...")
+spark.streams.awaitAnyTermination(timeout=10)
 for stream in spark.streams.active:
-    stream.stop()
+  stream.stop()
 
 print("Lab completed!")
