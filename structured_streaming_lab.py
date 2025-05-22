@@ -11,14 +11,14 @@ spark = SparkSession.builder \
 
 # 1. Read static version of the dataset
 print("1. Reading static dataset...")
-static = spark.read.json("/app/data/activity-data")
+static = spark.read.json("/opt/bitnami/spark/data/activity-data")
 dataSchema = static.schema
 
 # 2. Create streaming version
 print("2. Creating streaming version...")
 streaming = spark.readStream.schema(dataSchema) \
   .option("maxFilesPerTrigger", 1) \
-  .json("data/activity-data")
+  .json("/opt/bitnami/spark/data/activity-data")
 
 # 3. Group and count by activity
 print("3. Grouping by activity...")

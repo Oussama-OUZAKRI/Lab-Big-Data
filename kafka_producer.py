@@ -3,10 +3,13 @@ import json
 import time
 from pathlib import Path
 
-# Initialize Kafka producer
+# Initialize Kafka producer with retries
 producer = KafkaProducer(
     bootstrap_servers=['kafka:9092'],
-    value_serializer=lambda x: json.dumps(x).encode('utf-8')
+    value_serializer=lambda x: json.dumps(x).encode('utf-8'),
+    retries=5,
+    retry_backoff_ms=1000,
+    max_block_ms=60000
 )
 
 def read_json_files():

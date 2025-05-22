@@ -8,7 +8,7 @@ RUN pip install -r /app/requirements.txt
 
 # Copy the application code
 COPY structured_streaming_lab.py /app/
-COPY data /app/data
+WORKDIR /opt/bitnami/spark/work-dir
 
 WORKDIR /app
 
